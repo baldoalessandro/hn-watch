@@ -2,9 +2,17 @@ use std::{thread};
 use std::time::Duration;
 use std::sync::mpsc::{Sender, Receiver};
 
+use chrono::prelude::*;
 use reqwest::blocking::{Client};
 use reqwest::Url;
+use serde::Serialize;
 
+
+#[derive(Serialize, Debug)]
+pub struct HNTopStoriesSnap {
+    t: DateTime<Utc>,
+    items: Vec<u32>,
+}
 
 pub enum EventType {
     Interrupted,
@@ -42,8 +50,7 @@ impl HNWatcher {
                     break;
                 },
                 EventType::AlarmFired => {
-                    let ids = self.get_topstories_ids();
-                    println!("{:#?}", ids);
+                    self.get_top_stories();
                     // Re-schedule this event after some interval
                     self.sleep_thread(sleep_t);
                 }
@@ -56,14 +63,25 @@ impl HNWatcher {
         thread::Builder::new()
             .name("hn-watcher-sleep".into())
             .spawn(move || {
-                println!("Sleeping for 5 secs");
+                println!("Sleeping for {} secs", sleep_t.as_secs());
                 thread::sleep(sleep_t);
                 tx.send(EventType::AlarmFired).unwrap();
             })
             .expect("Failed to spawn thread with name");
     }
 
-    fn get_topstories_ids(&self) -> Vec<u32> {
+    fn get_top_stories(&self) {
+        let ids = self.get_top_stories_ids();
+        // Select only the first 30 items (the first page)&ids[..30];
+        let snap = HNTopStoriesSnap {
+            t: Utc::now(),
+            items: ids.into_iter().take(30).collect()
+        };
+        let serialized_snap = serde_json::to_string(&snap).unwrap();
+        println!("{:#?}", serialized_snap);
+    }
+
+    fn get_top_stories_ids(&self) -> Vec<u32> {
         let url = self.base_url.join("topstories.json").unwrap();
         let resp = self.http_c.get(url).send().unwrap();
         resp.json::<Vec<u32>>().unwrap()
