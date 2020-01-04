@@ -5,13 +5,27 @@ use std::sync::mpsc::{Sender, Receiver};
 use chrono::prelude::*;
 use reqwest::blocking::{Client};
 use reqwest::Url;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 
 #[derive(Serialize, Debug)]
 pub struct HNTopStoriesSnap {
     t: DateTime<Utc>,
-    items: Vec<u32>,
+    items: Vec<HNTopStorySnap>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct HNTopStorySnap {
+    id: u32,
+
+    #[serde(default)]
+    #[serde(rename(serialize = "s"))]
+    score: u32,
+
+    #[serde(default)]
+    #[serde(rename(serialize = "c"))]
+    #[serde(rename(deserialize = "descendants"))]
+    comments: u32,
 }
 
 pub enum EventType {
@@ -50,7 +64,9 @@ impl HNWatcher {
                     break;
                 },
                 EventType::AlarmFired => {
-                    self.get_top_stories();
+                    let snap = self.get_top_stories_snap();
+                    let serialized_snap = serde_json::to_string(&snap).unwrap();
+                    println!("{:#?}", serialized_snap);
                     // Re-schedule this event after some interval
                     self.sleep_thread(sleep_t);
                 }
@@ -70,20 +86,26 @@ impl HNWatcher {
             .expect("Failed to spawn thread with name");
     }
 
-    fn get_top_stories(&self) {
+    fn get_top_stories_snap(&self) -> HNTopStoriesSnap {
+        let t = Utc::now();
         let ids = self.get_top_stories_ids();
-        // Select only the first 30 items (the first page)&ids[..30];
-        let snap = HNTopStoriesSnap {
-            t: Utc::now(),
-            items: ids.into_iter().take(30).collect()
-        };
-        let serialized_snap = serde_json::to_string(&snap).unwrap();
-        println!("{:#?}", serialized_snap);
+        // Select only the first 30 items (the first page) and get stats
+        let items: Vec<HNTopStorySnap> = ids.into_iter().take(30).map(|id| {
+            self.get_story_detail_snap(id)
+        }).collect();
+
+        HNTopStoriesSnap {t, items}
     }
 
     fn get_top_stories_ids(&self) -> Vec<u32> {
         let url = self.base_url.join("topstories.json").unwrap();
         let resp = self.http_c.get(url).send().unwrap();
         resp.json::<Vec<u32>>().unwrap()
+    }
+
+    fn get_story_detail_snap(&self, id: u32) -> HNTopStorySnap {
+        let url = self.base_url.join(&format!("item/{}.json", id)).unwrap();
+        let resp = self.http_c.get(url).send().unwrap();
+        resp.json::<HNTopStorySnap>().unwrap()
     }
 }
