@@ -1,0 +1,10 @@
+[package]
+name = "hn-watch"
+version = "0.1.0"
+authors = ["Alessandro Baldo"]
+edition = "2018"
+
+
+[dependencies]
+reqwest = { version = "0.10", features = ["blocking", "json"] }
+ctrlc = "3.1.3"
