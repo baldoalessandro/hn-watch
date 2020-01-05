@@ -19,5 +19,5 @@ fn main() {
         (tx, rx)
     );
 
-    hn_watcher.watch(5);
+    hn_watcher.watch(300);
 }
