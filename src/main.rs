@@ -14,7 +14,7 @@ fn main() {
     }).expect("Error setting Ctrl-C handler");
 
     // Init watcher
-    let hn_watcher = watcher::HNWatcher::new(
+    let mut hn_watcher = watcher::HNWatcher::new(
         "https://hacker-news.firebaseio.com/v0/",
         (tx, rx)
     );
